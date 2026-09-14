@@ -9,3 +9,4 @@ An overview of sample repositories and projects using ``emscripten-forge``
    xeus_python_lite
    python_repl_demo
    pyb2d_demo
+   qtapp

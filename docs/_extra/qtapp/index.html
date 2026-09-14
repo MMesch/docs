@@ -1,0 +1,290 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>qt-wasm-runner</title>
+  <style>
+    :root {
+      color-scheme: dark;
+    }
+    html, body {
+      margin: 0;
+      padding: 0;
+      overflow: hidden;
+      height: 100%;
+      background: #181c28;
+      color: #ddd;
+      font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+    }
+    #topbar {
+      display: flex;
+      gap: 6px;
+      align-items: center;
+      padding: 8px 10px;
+      background: rgba(30, 34, 46, 0.85);
+      border-bottom: 1px solid #2a2f3f;
+      position: fixed;
+      top: 0; left: 0; right: 0;
+      z-index: 10000;
+      font-size: 13px;
+    }
+    #topbar input {
+      flex: 1;
+      min-width: 0;
+      padding: 5px 8px;
+      background: #12151d;
+      color: #ddd;
+      border: 1px solid #3a4050;
+      border-radius: 3px;
+      font-family: monospace;
+      font-size: 12px;
+    }
+    #topbar button {
+      padding: 5px 14px;
+      background: #2a2f3f;
+      color: #ddd;
+      border: 1px solid #3a4050;
+      border-radius: 3px;
+      cursor: pointer;
+      font: inherit;
+    }
+    #topbar button:hover, #topbar .fake-btn:hover { background: #353b4d; }
+    #topbar button:disabled { opacity: 0.5; cursor: default; }
+    #topbar .fake-btn {
+      padding: 5px 14px;
+      background: #2a2f3f;
+      color: #ddd;
+      border: 1px solid #3a4050;
+      border-radius: 3px;
+      cursor: pointer;
+      font: inherit;
+    }
+    #topbar a { color: #7ac; text-decoration: none; font-size: 11px; }
+    #dropzone {
+      position: fixed;
+      top: 40px; left: 0; right: 0; bottom: 24px;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      font-size: 20px;
+      color: #ddd;
+      background: rgba(20, 30, 50, 0.85);
+      border: 3px dashed #4a80b0;
+      z-index: 10001;
+      pointer-events: none;
+    }
+    #dropzone code {
+      background: #12151d;
+      padding: 2px 6px;
+      border-radius: 3px;
+      font-size: 16px;
+    }
+    body.dragging #dropzone { display: flex; }
+
+    /* Chrome-hidden mode: collapse topbar + status so the app gets the
+       full viewport. Toggle button stays visible so users can un-hide. */
+    body.chrome-hidden #topbar,
+    body.chrome-hidden #status { display: none; }
+    body.chrome-hidden #screen { top: 0; bottom: 0; }
+    #chrome-toggle, #share-floating, #exit-floating {
+      position: fixed;
+      bottom: 4px;
+      z-index: 10002;
+      width: 26px; height: 26px;
+      padding: 0;
+      background: rgba(30, 34, 46, 0.35);
+      color: #ddd;
+      border: 1px solid rgba(80, 100, 130, 0.4);
+      border-radius: 3px;
+      cursor: pointer;
+      font-size: 14px;
+      line-height: 24px;
+      opacity: 0.4;
+      transition: opacity 120ms;
+    }
+    #chrome-toggle { right: 4px; }
+    #share-floating { right: 34px; }
+    #exit-floating { right: 64px; }
+    #chrome-toggle:hover, #share-floating:hover, #exit-floating:hover { opacity: 1; }
+    body.chrome-hidden #chrome-toggle,
+    body.chrome-hidden #share-floating,
+    body.chrome-hidden #exit-floating { opacity: 0.3; }
+    #hosted-by {
+      position: fixed;
+      bottom: 6px; right: 98px;
+      z-index: 10002;
+      font-size: 11px;
+      font-family: system-ui, -apple-system, sans-serif;
+      color: #ddd;
+      opacity: 0.4;
+      transition: opacity 120ms;
+      user-select: none;
+    }
+    #hosted-by:hover { opacity: 1; }
+    #hosted-by a { color: inherit; text-decoration: none; }
+    #hosted-by a:hover { text-decoration: underline; }
+    #help {
+      position: fixed;
+      top: 40px; left: 0; right: 0; bottom: 24px;
+      display: none;
+      overflow: auto;
+      padding: 40px 20px;
+      background: #181c28;
+      z-index: 9999;
+    }
+    body.show-help #help { display: block; }
+    #help .inner {
+      max-width: 720px;
+      margin: 0 auto;
+      line-height: 1.5;
+    }
+    #help h1 { font-size: 22px; margin: 0 0 6px; color: #eee; }
+    #help h2 { font-size: 15px; margin: 24px 0 6px; color: #7ac; }
+    #help p, #help li { font-size: 14px; color: #cbd; }
+    #help code {
+      background: #12151d;
+      padding: 1px 6px;
+      border-radius: 3px;
+      font-size: 12px;
+      color: #eea;
+    }
+    #help a { color: #7ac; }
+    #help .subtle { opacity: 0.6; font-size: 12px; margin-top: 24px; }
+    #screen {
+      position: fixed;
+      top: 40px; left: 0; right: 0; bottom: 24px;
+      display: block;
+    }
+    #status {
+      position: fixed;
+      bottom: 0; left: 0; right: 0;
+      padding: 4px 10px;
+      background: rgba(20, 24, 34, 0.85);
+      border-top: 1px solid #2a2f3f;
+      font-size: 11px;
+      font-family: monospace;
+      opacity: 0.75;
+      z-index: 10000;
+    }
+    #status.error { color: #f77; opacity: 1; }
+  </style>
+</head>
+<body>
+  <div id="topbar">
+    <input id="url" placeholder="package .tar.bz2 URL (e.g. https://repo.prefix.dev/emscripten-forge-4x-experimental/emscripten-wasm32/qt-calculator-...tar.bz2)" spellcheck="false">
+    <button id="load">Run URL</button>
+    <label for="file" class="fake-btn">Choose file…</label>
+    <input id="file" type="file" accept=".tar.bz2,application/x-bzip2,application/x-tar" hidden>
+    <button id="share" title="Copy shareable URL to clipboard">Share</button>
+    <button id="reload" onclick="location.reload()">Reload</button>
+    <button id="exit" title="Unload current app and return to the runner start page">Exit</button>
+    <button id="help-btn" title="Show help">?</button>
+    <a href="https://github.com/emscripten-forge/docs/tree/main/docs/_extra/qtapp" target="_blank" rel="noopener">source</a>
+  </div>
+  <div id="screen"></div>
+  <div id="hosted-by">hosted by <a href="https://emscripten-forge.org/" target="_blank" rel="noopener">emscripten-forge</a></div>
+  <button id="exit-floating" title="Unload current app" aria-label="Exit">×</button>
+  <button id="share-floating" title="Copy shareable URL" aria-label="Share">↗</button>
+  <button id="chrome-toggle" title="Toggle top/status bars (F)" aria-label="Toggle chrome">⛶</button>
+  <div id="dropzone">Drop a <code>.tar.bz2</code> anywhere</div>
+  <div id="help">
+    <div class="inner">
+      <h1>qt-wasm-runner</h1>
+      <p>Runs Qt6-wasm apps packaged for
+        <a href="https://emscripten-forge.org/" target="_blank" rel="noopener">emscripten-forge</a>
+        directly in the browser. Nothing is installed; the package is fetched
+        (or read from your disk), unpacked in memory, and handed to Qt's
+        WebAssembly loader.</p>
+
+      <h2>How to load a package</h2>
+      <ul>
+        <li><strong>Paste a URL</strong> to a <code>.tar.bz2</code> package (e.g. from
+          <a href="https://prefix.dev/channels/emscripten-forge-4x-experimental" target="_blank" rel="noopener">prefix.dev/emscripten-forge-4x-experimental</a>)
+          into the top bar and press <em>Run URL</em>.</li>
+        <li><strong>Choose a local file</strong> with the file button.</li>
+        <li><strong>Drag &amp; drop</strong> a <code>.tar.bz2</code> anywhere on the page.</li>
+        <li><strong>Deep-link</strong>: append <code>?pkg=&lt;url-encoded package URL&gt;</code>
+          to auto-load a package on page open.</li>
+      </ul>
+
+      <h2>What it does under the hood</h2>
+      <ol>
+        <li>Decodes <code>.tar.bz2</code> in-browser via
+          <a href="https://www.npmjs.com/package/@emscripten-forge/untarjs" target="_blank" rel="noopener"><code>@emscripten-forge/untarjs</code></a>.</li>
+        <li>Locates the app under <code>share/&lt;name&gt;/</code>
+          (looks for the single <code>*.wasm</code>), then wraps every sibling
+          file (<code>&lt;name&gt;.js</code>, <code>qtloader.js</code>, the wasm blob)
+          as <code>blob:</code> URLs.</li>
+        <li>Loads Qt's <code>qtloader.js</code> and the app's Emscripten glue,
+          then calls <code>qtLoad()</code> with a <code>locateFile</code> hook
+          that resolves further requests to those blob URLs — no more network.</li>
+        <li>Fires a couple of synthetic <code>resize</code> events after boot to
+          work around a Qt6-wasm quirk where the first paint only commits after
+          a resize.</li>
+      </ol>
+
+      <h2>Package requirements</h2>
+      <p>The runner is intentionally strict about layout. A package is
+        runnable if and only if it satisfies:</p>
+      <ul>
+        <li><strong>Format</strong>: <code>.tar.bz2</code> (standard conda
+          package). <code>.conda</code> not yet supported.</li>
+        <li><strong>Layout</strong>: exactly one wasm at
+          <code>share/&lt;appname&gt;/&lt;appname&gt;.wasm</code>, with these
+          three siblings in the same directory:
+          <ul>
+            <li><code>&lt;appname&gt;.js</code> — Emscripten glue built with
+              <code>-sMODULARIZE=1 -sEXPORT_NAME=&lt;appname_underscored&gt;_entry</code>
+              (Qt's <code>qt_add_executable</code> does this by default).</li>
+            <li><code>qtloader.js</code> — Qt's browser boot helper. Shipped
+              automatically by Qt for any wasm-target executable.</li>
+            <li><code>&lt;appname&gt;.wasm</code> — the compiled binary.</li>
+          </ul>
+        </li>
+        <li><strong>Entry export</strong>: the JS glue must expose
+          <code>window.&lt;appname_with_dashes_as_underscores&gt;_entry</code>
+          (e.g. <code>qt-calculator</code> → <code>qt_calculator_entry</code>).
+          This is the default <code>MODULARIZE</code> pattern for
+          <code>qt_add_executable</code>.</li>
+        <li><strong>Linked with JSPI</strong>: <code>-sJSPI=1</code> at final
+          link (Qt propagates this via cmake INTERFACE when qt6 is built with
+          <code>-feature-wasm-jspi</code>, which the
+          <code>emscripten-forge-4x-experimental</code> qt6 is).</li>
+      </ul>
+      <p>The runner discovers <code>&lt;appname&gt;</code> by scanning for the
+        single <code>share/*/*.wasm</code> file in the archive, so you don't
+        pass it separately.</p>
+
+      <h2>Browser requirements</h2>
+      <p>Qt6-wasm on emscripten-forge is built with JavaScript Promise
+        Integration (JSPI) for its event loop. That needs
+        <strong>Chrome 137+</strong>, <strong>Firefox 141+</strong>, or
+        <strong>Safari 18.4+</strong>. Older browsers won't run the demos.</p>
+
+      <h2>Known limitations</h2>
+      <ul>
+        <li><strong>Continuous animation at 60 fps</strong>: timer-driven Qt
+          animations under JSPI can starve the browser main thread. Static and
+          event-driven UIs (calculators, editors, viewers) work fine; games and
+          animated demos need a different tick source
+          (<code>requestAnimationFrame</code> via emscripten C API).</li>
+        <li><strong>Dynamic side-module deps</strong> (e.g. openblas as a
+          runtime <code>.so</code>): not yet supported. The runner only knows
+          about the app's own artifacts today.</li>
+        <li><strong>Only <code>.tar.bz2</code></strong>. <code>.conda</code>
+          format (zstd inside zip) would need additional decoders.</li>
+      </ul>
+
+      <p class="subtle">Runner MIT-licensed. Qt itself is LGPLv3; source and
+        recipes are on
+        <a href="https://github.com/emscripten-forge/recipes" target="_blank" rel="noopener">emscripten-forge/recipes</a>.
+        Source of this runner:
+        <a href="https://github.com/emscripten-forge/docs/tree/main/docs/_extra/qtapp" target="_blank" rel="noopener">emscripten-forge/docs / docs/_extra/qtapp</a>.</p>
+    </div>
+  </div>
+  <div id="status">Loading help — press <kbd>?</kbd> to dismiss and load a package.</div>
+
+  <script type="module" src="./runner.js"></script>
+</body>
+</html>
